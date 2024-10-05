@@ -25,7 +25,7 @@ var broadcast = make(chan Message)
 
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
-		return true
+		return true // Allow connections from any origin
 	},
 }
 
@@ -96,28 +96,41 @@ func postMessageHandler(c *gin.Context) {
 func handleWebSocket(c *gin.Context) {
     ws, err := upgrader.Upgrade(c.Writer, c.Request, nil)
     if err != nil {
-        c.JSON(500, gin.H{"error": "Could not open websocket connection"})
+        log.Printf("Failed to upgrade WebSocket: %v", err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not open WebSocket connection"})
         return
     }
+
+    log.Println("WebSocket upgrade successful")
+
+    // Defer closure and cleanup when the connection is closed
     defer func() {
-        // Ensure the client is removed on disconnect
+        log.Println("Closing WebSocket connection")
         delete(clients, ws)
         ws.Close()
     }()
 
-    // Add new WebSocket client
+    // Add WebSocket connection to the map of clients
     clients[ws] = true
 
+    // Keep reading messages until an error occurs or connection closes
     for {
-        var msg Message
-        // Read message from WebSocket
-        err := ws.ReadJSON(&msg)
+        _, _, err := ws.ReadMessage()
         if err != nil {
-            // Remove client on error or disconnect
+            // Log the error for debugging
+            log.Printf("WebSocket read error: %v", err)
             delete(clients, ws)
             break
         }
-        // Broadcast message to all connected clients
+
+        // If the connection is valid and no read error occurs, proceed with broadcasting
+        var msg Message
+        if err := db.Order("created_at desc").First(&msg).Error; err != nil {
+            log.Printf("Failed to retrieve message: %v", err)
+            continue
+        }
+
+        // Broadcast the message to all connected clients
         broadcast <- msg
     }
 }
@@ -134,4 +147,3 @@ func handleMessages() {
 		}
 	}
 }
-

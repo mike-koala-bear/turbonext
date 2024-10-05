@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // Proxying API requests during development
+  reactStrictMode: false,
   async rewrites() {
     return [
       {
