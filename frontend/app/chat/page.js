@@ -1,108 +1,139 @@
-"use client" // This ensures it's a client-side component
+"use client"
 
 import { useEffect, useState, useRef } from "react"
 import axios from "axios"
+import { useRouter } from "next/navigation"
 
 export default function ChatPage() {
   const [messages, setMessages] = useState([]) // Store chat messages
-  const [input, setInput] = useState("") // Store the user's input
-  const socket = useRef(null) // Use ref to avoid recreating WebSocket on each render
+  const [input, setInput] = useState("") // Store user's input
+  const socket = useRef(null) // WebSocket reference
+  const router = useRouter()
+  const reconnectDelay = useRef(5000) // Delay for reconnecting WebSocket
 
+  // Fetch chat messages and establish WebSocket connection
   useEffect(() => {
-    // Fetch chat history when the component mounts
+    // Fetch persisted chat messages from the server
     axios
-      .get("/api/messages")
+      .get("/api/messages", { withCredentials: true })
       .then((response) => {
-        setMessages(response.data) // Set chat history (past messages)
+        setMessages(response.data) // Store fetched messages in state
       })
       .catch((error) => {
         console.error("Error fetching messages:", error)
+        router.push("/login") // Redirect to login on error
       })
 
-    // Function to establish WebSocket connection
+    // WebSocket connection and reconnection logic
     const connectWebSocket = () => {
-      socket.current = new WebSocket("ws://localhost:8080/ws") // Update port if needed
+      socket.current = new WebSocket("ws://localhost:8080/ws")
 
-      socket.current.onopen = () => {
+      // On WebSocket connection, send JWT token for authentication
+      socket.current.onopen = async () => {
         console.log("WebSocket connected")
+
+        // Get the JWT token from the server for WebSocket authentication
+        const tokenResponse = await axios.get("/api/get-token", {
+          withCredentials: true,
+        })
+        const token = tokenResponse.data.token
+
+        // Send the token as the first WebSocket message for authentication
+        socket.current.send(
+          JSON.stringify({
+            token: token,
+          })
+        )
       }
 
-      // Handle incoming WebSocket messages (real-time updates)
+      // Handle incoming WebSocket messages
       socket.current.onmessage = (event) => {
+        console.log("WebSocket received a message:", event.data)
         const newMessage = JSON.parse(event.data)
 
-        // Prevent duplicate messages: Only add unique messages
-        setMessages((prevMessages) => {
-          if (!prevMessages.some((msg) => msg.id === newMessage.id)) {
-            return [newMessage, ...prevMessages]
-          }
-          return prevMessages
-        })
+        // Update chat messages state
+        setMessages((prevMessages) => [newMessage, ...prevMessages])
       }
 
-      // Handle WebSocket closure and attempt reconnection
+      // Handle WebSocket closure and reconnect
       socket.current.onclose = (event) => {
-        console.log("WebSocket closed:", event)
+        console.error("WebSocket closed:", event)
         if (!event.wasClean) {
-          console.log("Attempting to reconnect...")
-          setTimeout(connectWebSocket, 3000) // Try to reconnect after 3 seconds
+          console.log(
+            `Reconnecting WebSocket in ${reconnectDelay.current / 1000} seconds`
+          )
+          setTimeout(connectWebSocket, reconnectDelay.current)
         }
       }
 
+      // Handle WebSocket errors
       socket.current.onerror = (error) => {
         console.error("WebSocket error:", error)
+        socket.current.close() // Close WebSocket on error
       }
     }
 
-    connectWebSocket() // Establish WebSocket connection
+    connectWebSocket() // Start WebSocket connection
 
-    // Cleanup WebSocket when component unmounts
+    // Clean up WebSocket connection when the component is unmounted
     return () => {
       if (socket.current) {
         console.log("Closing WebSocket")
         socket.current.close()
       }
     }
-  }, []) // Empty dependency ensures it only runs once when the component mounts
+  }, [])
 
-  // Handle sending a new message
+  // Send a new message via WebSocket
   const handleSendMessage = () => {
     const newMessage = {
-      username: "User1", // Replace with dynamic username if needed
-      content: input,
+      content: input, // Send the user's message input
     }
-
-    // Send message via WebSocket
+    console.log("sending message: ", newMessage)
+    // Check if WebSocket is open before sending the message
     if (socket.current && socket.current.readyState === WebSocket.OPEN) {
-      socket.current.send(JSON.stringify(newMessage)) // Send via WebSocket
+      console.log("socket is open and is sending message")
+      socket.current.send(JSON.stringify(newMessage))
     }
-
-    // Post message to the backend for persistence (but don't update state manually)
-    axios.post("/api/messages", newMessage).catch((error) => {
-      console.error("Error posting message:", error)
-    })
-
-    setInput("") // Clear the input field after sending the message
+    console.log("clearing input")
+    setInput("") // Clear input field after sending message
   }
 
   return (
-    <div>
-      <h1>Chat Room</h1>
-      <div className="chat-box">
-        {messages.map((msg, index) => (
-          <div key={index}>
-            <strong>{msg.username}:</strong> {msg.content} <br />
-            <small>{new Date(msg.created_at).toLocaleString()}</small>
-          </div>
-        ))}
+    <div className="min-h-screen bg-gray-100 p-8 flex flex-col items-center">
+      <h1 className="text-3xl font-bold mb-4">Chat Room</h1>
+
+      <div className="bg-white shadow-lg rounded-lg p-6 w-full max-w-lg">
+        {/* Display chat messages */}
+        <div className="mb-4 h-64 overflow-y-auto border p-4 bg-gray-50 rounded">
+          {messages.map((msg, index) => (
+            <div key={index} className="mb-2">
+              <strong>{msg.username}:</strong> {msg.content}
+              <br />
+              <small className="text-gray-500">
+                {new Date(msg.created_at).toLocaleString()}
+              </small>
+            </div>
+          ))}
+        </div>
+
+        {/* Input for new messages */}
+        <div className="flex">
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Type a message..."
+            className="flex-grow p-2 border border-gray-300 rounded-l-md focus:outline-none"
+          />
+          <button
+            onClick={handleSendMessage}
+            className="bg-blue-500 text-white px-4 py-2 rounded-r-md hover:bg-blue-600"
+          >
+            Send
+          </button>
+        </div>
       </div>
-      <input
-        type="text"
-        value={input}
-        onChange={(e) => setInput(e.target.value)}
-        placeholder="Type a message..."
-      />
-      <button onClick={handleSendMessage}>Send</button>
     </div>
   )
 }
