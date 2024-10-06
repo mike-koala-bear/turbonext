@@ -9,7 +9,6 @@ export default function ChatPage() {
   const [input, setInput] = useState("") // Store user's input
   const socket = useRef(null) // WebSocket reference
   const router = useRouter()
-  const reconnectDelay = useRef(5000) // Delay for reconnecting WebSocket
 
   // Fetch chat messages and establish WebSocket connection
   useEffect(() => {
@@ -58,12 +57,6 @@ export default function ChatPage() {
       // Handle WebSocket closure and reconnect
       socket.current.onclose = (event) => {
         console.error("WebSocket closed:", event)
-        if (!event.wasClean) {
-          console.log(
-            `Reconnecting WebSocket in ${reconnectDelay.current / 1000} seconds`
-          )
-          setTimeout(connectWebSocket, reconnectDelay.current)
-        }
       }
 
       // Handle WebSocket errors
