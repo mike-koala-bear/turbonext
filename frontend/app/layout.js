@@ -1,5 +1,7 @@
 import "./globals.css"
 import Navbar from "./navbar"
+import Providers from "./Providers"
+import { cookies } from "next/headers"
 
 export const metadata = {
   title: "Create Next App",
@@ -7,11 +9,20 @@ export const metadata = {
 }
 
 export default function RootLayout({ children }) {
+  // Read the cookies on the server
+  const cookieStore = cookies()
+  const token = cookieStore.get("jwt_token")?.value
+
+  // Determine if the user is authenticated
+  const isAuthenticated = token ? true : false
+
   return (
     <html lang="en">
       <body>
-        <Navbar />
-        {children}
+        <Providers isAuthenticated={isAuthenticated}>
+          <Navbar />
+          {children}
+        </Providers>
       </body>
     </html>
   )
