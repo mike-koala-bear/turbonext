@@ -2,44 +2,24 @@
 
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useEffect, useState } from "react"
+import { useContext } from "react"
 import axios from "axios"
+import AuthContext from "./context/AuthContext"
 
 export default function Navbar() {
   const router = useRouter()
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [hasMounted, setHasMounted] = useState(false)
-
-  useEffect(() => {
-    // Check authentication status by making an API request
-    const checkAuthStatus = async () => {
-      try {
-        // Send a request to a protected route
-        const res = await axios.get("/api/check-auth", {
-          withCredentials: true,
-        }) // Token sent via cookie
-        if (res.status === 200) {
-          setIsAuthenticated(true) // User is authenticated
-        }
-      } catch (error) {
-        setIsAuthenticated(false) // User is not authenticated
-      }
-    }
-
-    checkAuthStatus()
-    setHasMounted(true) // Set the component as mounted
-  }, [])
-
-  // Prevent rendering until after the component has mounted
-  if (!hasMounted) {
-    return null // or a loading indicator if you prefer
-  }
+  const { isAuthenticated, setIsAuthenticated } = useContext(AuthContext)
 
   const handleLogout = () => {
-    // Logout logic (e.g., clear cookies, or backend endpoint for logout)
-    axios.post("/api/logout", {}, { withCredentials: true }).then(() => {
-      router.push("/login")
-    })
+    axios
+      .post("/api/logout", {}, { withCredentials: true })
+      .then(() => {
+        setIsAuthenticated(false)
+        router.push("/login")
+      })
+      .catch((error) => {
+        console.error("An error occurred during logout:", error)
+      })
   }
 
   return (

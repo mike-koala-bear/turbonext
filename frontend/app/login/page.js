@@ -1,14 +1,16 @@
 "use client"
 
-import { useState } from "react"
+import { useContext, useState } from "react"
 import { useRouter } from "next/navigation"
 import axios from "axios"
+import AuthContext from "../context/AuthContext"
 
 export default function Login() {
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
   const router = useRouter()
+  const { setIsAuthenticated } = useContext(AuthContext)
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -19,10 +21,11 @@ export default function Login() {
         password,
       })
 
-      // No need to handle the token manually,
-      // it is stored in HttpOnly cookie automatically
+      // Update authentication status
+      setIsAuthenticated(true)
+
       // Redirect to the chat page
-      // router.push("/chat")
+      router.push("/chat")
     } catch (err) {
       console.log("Error:", err)
       setError("Invalid username or password")
