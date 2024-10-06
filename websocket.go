@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
 )
 
@@ -54,13 +54,13 @@ func handleWebSocket(c *gin.Context) {
 		}
 
 		// Token Authentication (handle JWT here)
-		if token, ok := messageData["token"]; ok {
+		if tokenStr, ok := messageData["token"]; ok {
 			claims := &Claims{}
-			tokenParsed, err := jwt.ParseWithClaims(token, claims, func(token *jwt.Token) (interface{}, error) {
+			token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
 				return jwtSecret, nil
 			})
 
-			if err != nil || !tokenParsed.Valid {
+			if err != nil || !token.Valid {
 				ws.WriteMessage(websocket.TextMessage, []byte("Invalid token"))
 				return
 			}
