@@ -4,19 +4,28 @@ import "log"
 
 var broadcast = make(chan Message)
 
-func handleMessages() {
+// Handle broadcasting messages to clients
+func handleBroadcast() {
 	for {
-		// Wait for a message to be sent to the broadcast channel
 		msg := <-broadcast
-		log.Printf("Broadcasting message: %s to %d clients", msg.Content, len(clients)) // Log the number of clients
-		for client := range clients {
+		clientsMutex.RLock()
+		roomClients, exists := clients[msg.RoomID]
+		clientsMutex.RUnlock()
+
+		if !exists {
+			continue // No clients in this room
+		}
+
+		for client := range roomClients {
 			err := client.WriteJSON(msg)
 			if err != nil {
-				log.Printf("Error broadcasting message to client: %v", err)
+				log.Printf("Error writing to WebSocket: %v", err)
 				client.Close()
-				delete(clients, client)
-			} else {
-				log.Printf("Message broadcasted to client")
+
+				// Remove the client from the room's client list
+				clientsMutex.Lock()
+				delete(clients[msg.RoomID], client)
+				clientsMutex.Unlock()
 			}
 		}
 	}

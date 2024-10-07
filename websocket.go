@@ -1,95 +1,108 @@
 package main
 
 import (
-	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
 )
 
-var clients = make(map[*websocket.Conn]bool)
+// Define a thread-safe map for clients per room
+var clients = make(map[uint]map[*websocket.Conn]bool) // roomID -> clients
+var clientsMutex = sync.RWMutex{}                     // Mutex to protect the clients map
 
-// upgrader upgrades the HTTP connection to a WebSocket
+// WebSocket upgrader
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
-		return true // Allow connections from any origin
+		return true
 	},
 }
 
+// Handle incoming WebSocket connections
 func handleWebSocket(c *gin.Context) {
+	roomIDParam := c.Param("roomID")
+	roomIDUint, err := strconv.ParseUint(roomIDParam, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid room ID"})
+		return
+	}
+	roomID := uint(roomIDUint)
+
+	// Upgrade initial GET request to a WebSocket
 	ws, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		log.Printf("Failed to upgrade WebSocket: %v", err)
 		return
 	}
 
-	// Add the client to the `clients` map
-	clients[ws] = true
-	log.Printf("Client connected: %v", ws.RemoteAddr())
+	// Retrieve the username from the authenticated context
+	username, exists := c.Get("username")
+	if !exists {
+		log.Printf("Username not found in context")
+		ws.WriteJSON(gin.H{"error": "Unauthorized"})
+		ws.Close()
+		return
+	}
+
+	// Add the client to the room's client list
+	clientsMutex.Lock()
+	if clients[roomID] == nil {
+		clients[roomID] = make(map[*websocket.Conn]bool)
+	}
+	clients[roomID][ws] = true
+	clientsMutex.Unlock()
+	log.Printf("Client %s connected to room %d", username.(string), roomID)
 
 	defer func() {
-		// Remove the client from the `clients` map on disconnect
-		delete(clients, ws)
-		log.Printf("Client disconnected: %v", ws.RemoteAddr())
+		// Remove the client from the room's client list on disconnect
+		clientsMutex.Lock()
+		delete(clients[roomID], ws)
+		clientsMutex.Unlock()
+		log.Printf("Client %s disconnected from room %d", username.(string), roomID)
 		ws.Close()
 	}()
 
-	var username string // Store the username
-
+	// Listen for incoming messages
 	for {
-		_, msg, err := ws.ReadMessage()
+		var incoming struct {
+			Content string `json:"content"`
+		}
+
+		// Read JSON message from WebSocket
+		err := ws.ReadJSON(&incoming)
 		if err != nil {
-			log.Printf("WebSocket read error: %v", err)
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+				log.Printf("Unexpected WebSocket closure: %v", err)
+			}
 			break
 		}
 
-		var messageData map[string]string
-		if err := json.Unmarshal(msg, &messageData); err != nil {
-			log.Printf("Failed to unmarshal message: %v", err)
+		// Validate incoming message
+		if incoming.Content == "" {
+			ws.WriteJSON(gin.H{"error": "Message content cannot be empty"})
 			continue
 		}
 
-		// Token Authentication (handle JWT here)
-		if tokenStr, ok := messageData["token"]; ok {
-			claims := &Claims{}
-			token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
-				return jwtSecret, nil
-			})
+		// Create a new Message instance
+		newMessage := Message{
+			Username:  username.(string),
+			Content:   incoming.Content,
+			CreatedAt: time.Now(),
+			RoomID:    roomID,
+		}
 
-			if err != nil || !token.Valid {
-				ws.WriteMessage(websocket.TextMessage, []byte("Invalid token"))
-				return
-			}
-
-			username = claims.Username
-			log.Printf("User authenticated via WebSocket: %s", username)
+		// Save the message to the database
+		if err := db.Create(&newMessage).Error; err != nil {
+			log.Printf("Failed to save message: %v", err)
+			ws.WriteJSON(gin.H{"error": "Failed to save message"})
 			continue
 		}
 
-		// Process chat messages
-		if content, ok := messageData["content"]; ok {
-			if username == "" {
-				ws.WriteMessage(websocket.TextMessage, []byte("User not authenticated"))
-				continue
-			}
-
-			newMessage := Message{
-				Username:  username,
-				Content:   content,
-				CreatedAt: time.Now(),
-			}
-
-			// Save the message to the database
-			if err := db.Create(&newMessage).Error; err != nil {
-				log.Printf("Failed to save message: %v", err)
-			}
-
-			// Broadcast the message
-			broadcast <- newMessage
-		}
+		// Broadcast the message to all clients in the same room
+		broadcast <- newMessage
 	}
 }

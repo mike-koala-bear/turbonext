@@ -18,9 +18,6 @@ func main() {
 	// Initialize the database
 	initDatabase()
 
-	// Start message broadcasting in the background
-	go handleMessages()
-
 	// Create a new Gin router
 	r := gin.Default()
 
@@ -42,12 +39,17 @@ func main() {
 	protected := r.Group("/")
 	protected.Use(authMiddleware())
 	{
-		protected.GET("/messages", getMessagesHandler)
-		protected.POST("/messages", postMessageHandler)
-		protected.GET("/ws", handleWebSocket)
+		protected.GET("/rooms", getRoomsHandler)
+		protected.POST("/rooms", createRoomHandler)
+		protected.GET("/rooms/:roomID/messages", getMessagesHandler)
+		protected.POST("/rooms/:roomID/messages", postMessageHandler)
+		protected.GET("/ws/:roomID", handleWebSocket)
 		protected.GET("/get-token", getTokenHandler)
 		protected.GET("/check-auth", checkAuthHandler)
 	}
+
+	// Start message broadcasting in the background
+	go handleBroadcast()
 
 	// Start the server
 	r.Run(":8080")

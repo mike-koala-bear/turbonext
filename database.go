@@ -11,11 +11,18 @@ import (
 	"gorm.io/gorm"
 )
 
+type Room struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	Name      string    `gorm:"unique;not null" json:"name"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 type Message struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
 	Username  string    `json:"username"`
 	Content   string    `json:"content"`
 	CreatedAt time.Time `json:"created_at"`
+	RoomID    uint      `json:"room_id"` // Foreign key
 }
 
 type User struct {
@@ -52,7 +59,7 @@ func initDatabase() {
 	}
 
 	// Automatically migrate the schema
-	err = db.AutoMigrate(&Message{}, &User{})
+	err = db.AutoMigrate(&Message{}, &Room{}, &User{})
 	if err != nil {
 		log.Fatal("Failed to migrate database schema:", err)
 	}

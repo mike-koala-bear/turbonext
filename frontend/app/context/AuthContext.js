@@ -18,23 +18,16 @@ export function AuthProvider({
         const res = await axios.get("/api/check-auth", {
           withCredentials: true,
           validateStatus: function (status) {
-            // Accept status codes 200 and 401
             return status === 200 || status === 401
           },
         })
 
         if (res.status === 200) {
-          // User is authenticated
           setIsAuthenticated(true)
-        } else if (res.status === 401) {
-          // User is not authenticated
+        } else {
           setIsAuthenticated(false)
         }
       } catch (error) {
-        console.error(
-          "An error occurred while checking authentication status:",
-          error
-        )
         setIsAuthenticated(false)
       } finally {
         setLoading(false)

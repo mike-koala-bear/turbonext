@@ -2,37 +2,12 @@ package main
 
 import (
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 )
-
-func getMessagesHandler(c *gin.Context) {
-	var messages []Message
-	if err := db.Order("created_at desc").Find(&messages).Error; err != nil {
-		c.JSON(500, gin.H{"error": "Failed to retrieve messages"})
-		return
-	}
-	c.JSON(200, messages)
-}
-
-func postMessageHandler(c *gin.Context) {
-	var newMessage Message
-	if err := c.ShouldBindJSON(&newMessage); err != nil {
-		c.JSON(400, gin.H{"error": "Invalid input"})
-		return
-	}
-	newMessage.CreatedAt = time.Now()
-	if err := db.Create(&newMessage).Error; err != nil {
-		c.JSON(500, gin.H{"error": "Failed to post message"})
-		return
-	}
-
-	// Broadcast the message to WebSocket clients
-	broadcast <- newMessage
-	c.JSON(201, newMessage)
-}
 
 func getTokenHandler(c *gin.Context) {
 	// Retrieve JWT token from cookie
@@ -66,4 +41,95 @@ func checkAuthHandler(c *gin.Context) {
 
 	// Return success if the token is valid
 	c.JSON(http.StatusOK, gin.H{"message": "Authenticated"})
+}
+
+// Create a new room
+func createRoomHandler(c *gin.Context) {
+	var newRoom struct {
+		Name string `json:"name"`
+	}
+
+	if err := c.ShouldBindJSON(&newRoom); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
+		return
+	}
+
+	room := Room{
+		Name:      newRoom.Name,
+		CreatedAt: time.Now(),
+	}
+
+	if err := db.Create(&room).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create room"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, room)
+}
+
+// Get all rooms
+func getRoomsHandler(c *gin.Context) {
+	var rooms []Room
+	if err := db.Find(&rooms).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve rooms"})
+		return
+	}
+	c.JSON(http.StatusOK, rooms)
+}
+
+// Get messages in a room
+func getMessagesHandler(c *gin.Context) {
+	roomIDParam := c.Param("roomID")
+	roomID, err := strconv.ParseUint(roomIDParam, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid room ID"})
+		return
+	}
+
+	var messages []Message
+	if err := db.Where("room_id = ?", roomID).Order("created_at desc").Find(&messages).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve messages"})
+		return
+	}
+	c.JSON(http.StatusOK, messages)
+}
+
+// Post a message to a room
+func postMessageHandler(c *gin.Context) {
+	roomIDParam := c.Param("roomID")
+	roomID, err := strconv.ParseUint(roomIDParam, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid room ID"})
+		return
+	}
+
+	var newMessage struct {
+		Content string `json:"content"`
+	}
+	if err := c.ShouldBindJSON(&newMessage); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
+		return
+	}
+
+	username, exists := c.Get("username")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	message := Message{
+		Username:  username.(string),
+		Content:   newMessage.Content,
+		CreatedAt: time.Now(),
+		RoomID:    uint(roomID),
+	}
+
+	if err := db.Create(&message).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to post message"})
+		return
+	}
+
+	// Broadcast the message to WebSocket clients in the room
+	broadcast <- message
+	c.JSON(http.StatusCreated, message)
 }
