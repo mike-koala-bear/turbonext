@@ -12,7 +12,7 @@ export default function RoomPage() {
   const [input, setInput] = useState("")
   const { isAuthenticated, loading } = useContext(AuthContext)
   const messageEndRef = useRef(null)
-  const ws = useRef(null) // WebSocket reference
+  const ws = useRef(null)
 
   // Fetch existing messages when component mounts
   useEffect(() => {
@@ -21,7 +21,8 @@ export default function RoomPage() {
         const res = await axios.get(`/api/rooms/${roomID}/messages`, {
           withCredentials: true,
         })
-        setMessages(res.data) // Assuming messages are ordered by newest first
+        setMessages(res.data)
+        scrollToBottom()
       } catch (err) {
         console.error("Error fetching messages:", err)
       }
@@ -33,36 +34,38 @@ export default function RoomPage() {
   useEffect(() => {
     if (!isAuthenticated) return
 
-    // Initialize WebSocket connection
-    ws.current = new WebSocket(`ws://localhost:8080/ws/${roomID}`)
+    const setupWebSocket = () => {
+      // Initialize WebSocket connection; cookies are sent automatically
+      ws.current = new WebSocket(`ws://localhost:8080/ws/${roomID}`)
 
-    ws.current.onopen = () => {
-      console.log(`Connected to room ${roomID}`)
-      // Optionally, send authentication details if required
-      // Example: ws.current.send(JSON.stringify({ token: 'YOUR_JWT_TOKEN' }));
-    }
+      ws.current.onopen = () => {
+        console.log(`Connected to room ${roomID}`)
+      }
 
-    ws.current.onmessage = (event) => {
-      try {
-        const newMessage = JSON.parse(event.data)
-        if (newMessage.error) {
-          console.error("WebSocket Error:", newMessage.error)
-          return
+      ws.current.onmessage = (event) => {
+        try {
+          const newMessage = JSON.parse(event.data)
+          if (newMessage.error) {
+            console.error("WebSocket Error:", newMessage.error)
+            return
+          }
+          setMessages((prevMessages) => [...prevMessages, newMessage])
+          scrollToBottom()
+        } catch (err) {
+          console.error("Error parsing WebSocket message:", err)
         }
-        setMessages((prevMessages) => [...prevMessages, newMessage])
-        scrollToBottom()
-      } catch (err) {
-        console.error("Error parsing WebSocket message:", err)
+      }
+
+      ws.current.onclose = () => {
+        console.log(`Disconnected from room ${roomID}`)
+      }
+
+      ws.current.onerror = (err) => {
+        console.error("WebSocket error:", err)
       }
     }
 
-    ws.current.onclose = () => {
-      console.log(`Disconnected from room ${roomID}`)
-    }
-
-    ws.current.onerror = (err) => {
-      console.error("WebSocket error:", err)
-    }
+    setupWebSocket()
 
     // Cleanup on component unmount
     return () => {
@@ -77,7 +80,7 @@ export default function RoomPage() {
     messageEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }
 
-  // Handle sending a message
+  // Handle sending a message via HTTP POST
   const handleSendMessage = async (e) => {
     e.preventDefault()
     if (input.trim() === "") return
@@ -85,19 +88,23 @@ export default function RoomPage() {
     const messagePayload = { content: input }
 
     try {
-      // Send message via HTTP POST to ensure it's saved
-      await axios.post(`/api/rooms/${roomID}/messages`, messagePayload, {
-        withCredentials: true,
-      })
+      // Send message via HTTP POST
+      const res = await axios.post(
+        `/api/rooms/${roomID}/messages`,
+        messagePayload,
+        {
+          withCredentials: true,
+        }
+      )
 
-      // Optionally, send the message via WebSocket for immediate broadcast
-      if (ws.current && ws.current.readyState === WebSocket.OPEN) {
-        ws.current.send(JSON.stringify(messagePayload))
+      if (res.status === 200) {
+        console.log("Message sent successfully")
+        setInput("")
+      } else {
+        console.error("Failed to send message:", res.data.error)
       }
-
-      setInput("")
     } catch (err) {
-      console.error("Failed to send message:", err)
+      console.error("Failed to send message via HTTP POST:", err)
     }
   }
 

@@ -11,18 +11,24 @@ import (
 	"gorm.io/gorm"
 )
 
-type Room struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	Name      string    `gorm:"unique;not null" json:"name"`
-	CreatedAt time.Time `json:"created_at"`
+type Message struct {
+	ID        uint           `json:"id" gorm:"primaryKey"`
+	Username  string         `json:"username"`
+	Content   string         `json:"content"`
+	CreatedAt time.Time      `json:"created_at"`
+	RoomID    uint           `json:"room_id"`
+	Room      Room           `json:"-"`
+	DeletedAt gorm.DeletedAt `json:"-" gorm:"index"`
 }
 
-type Message struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	Username  string    `json:"username"`
-	Content   string    `json:"content"`
-	CreatedAt time.Time `json:"created_at"`
-	RoomID    uint      `json:"room_id"` // Foreign key
+// Room represents a chat room
+type Room struct {
+	ID        uint           `json:"id" gorm:"primaryKey"`
+	Name      string         `json:"name"`
+	Messages  []Message      `json:"messages"`
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
+	DeletedAt gorm.DeletedAt `json:"-" gorm:"index"`
 }
 
 type User struct {

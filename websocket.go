@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"strconv"
 	"sync"
-	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
 )
 
@@ -27,10 +27,30 @@ func handleWebSocket(c *gin.Context) {
 	roomIDParam := c.Param("roomID")
 	roomIDUint, err := strconv.ParseUint(roomIDParam, 10, 64)
 	if err != nil {
+		log.Printf("Invalid room ID: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid room ID"})
 		return
 	}
 	roomID := uint(roomIDUint)
+
+	// Extract token from cookies
+	tokenString, err := c.Cookie("jwt_token")
+	if err != nil || tokenString == "" {
+		log.Printf("Missing or invalid token for WebSocket connection")
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Missing or invalid token"})
+		return
+	}
+
+	// Validate JWT token
+	claims := &Claims{}
+	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+		return jwtSecret, nil
+	})
+	if err != nil || !token.Valid {
+		log.Printf("Invalid or expired token for WebSocket connection: %v", err)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired token"})
+		return
+	}
 
 	// Upgrade initial GET request to a WebSocket
 	ws, err := upgrader.Upgrade(c.Writer, c.Request, nil)
@@ -39,14 +59,7 @@ func handleWebSocket(c *gin.Context) {
 		return
 	}
 
-	// Retrieve the username from the authenticated context
-	username, exists := c.Get("username")
-	if !exists {
-		log.Printf("Username not found in context")
-		ws.WriteJSON(gin.H{"error": "Unauthorized"})
-		ws.Close()
-		return
-	}
+	username := claims.Username
 
 	// Add the client to the room's client list
 	clientsMutex.Lock()
@@ -55,54 +68,25 @@ func handleWebSocket(c *gin.Context) {
 	}
 	clients[roomID][ws] = true
 	clientsMutex.Unlock()
-	log.Printf("Client %s connected to room %d", username.(string), roomID)
+	log.Printf("Client %s connected to room %d via WebSocket", username, roomID)
 
 	defer func() {
 		// Remove the client from the room's client list on disconnect
 		clientsMutex.Lock()
 		delete(clients[roomID], ws)
 		clientsMutex.Unlock()
-		log.Printf("Client %s disconnected from room %d", username.(string), roomID)
+		log.Printf("Client %s disconnected from room %d", username, roomID)
 		ws.Close()
 	}()
 
-	// Listen for incoming messages
+	// Since messages are sent via HTTP POST, WebSocket is only for receiving
 	for {
-		var incoming struct {
-			Content string `json:"content"`
-		}
-
-		// Read JSON message from WebSocket
-		err := ws.ReadJSON(&incoming)
-		if err != nil {
+		// Listen for close messages or pings/pongs to keep the connection alive
+		if _, _, err := ws.NextReader(); err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				log.Printf("Unexpected WebSocket closure: %v", err)
+				log.Printf("Unexpected WebSocket closure for client %s in room %d: %v", username, roomID, err)
 			}
 			break
 		}
-
-		// Validate incoming message
-		if incoming.Content == "" {
-			ws.WriteJSON(gin.H{"error": "Message content cannot be empty"})
-			continue
-		}
-
-		// Create a new Message instance
-		newMessage := Message{
-			Username:  username.(string),
-			Content:   incoming.Content,
-			CreatedAt: time.Now(),
-			RoomID:    roomID,
-		}
-
-		// Save the message to the database
-		if err := db.Create(&newMessage).Error; err != nil {
-			log.Printf("Failed to save message: %v", err)
-			ws.WriteJSON(gin.H{"error": "Failed to save message"})
-			continue
-		}
-
-		// Broadcast the message to all clients in the same room
-		broadcast <- newMessage
 	}
 }

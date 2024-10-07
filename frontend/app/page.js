@@ -12,7 +12,6 @@ export default function Home() {
       <h1>Welcome to the Chat App</h1>
 
       {isAuthenticated && <p>You are logged in!</p>}
-      <Link href="/chat">Go to Chat Room</Link>
     </div>
   )
 }
