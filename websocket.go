@@ -11,9 +11,9 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// Define a thread-safe map for clients per room
-var clients = make(map[uint]map[*websocket.Conn]bool) // roomID -> clients
-var clientsMutex = sync.RWMutex{}                     // Mutex to protect the clients map
+// Update the clients map to use uint64 as the key
+var clients = make(map[uint64]map[*websocket.Conn]bool) // roomID -> clients
+var clientsMutex = sync.RWMutex{}                       // Mutex to protect the clients map
 
 // WebSocket upgrader
 var upgrader = websocket.Upgrader{
@@ -25,21 +25,14 @@ var upgrader = websocket.Upgrader{
 // Handle incoming WebSocket connections
 func handleWebSocket(c *gin.Context) {
 	roomIDParam := c.Param("roomID")
-	roomIDUint64, err := strconv.ParseUint(roomIDParam, 10, 64)
+	roomID, err := strconv.ParseUint(roomIDParam, 10, 64)
 	if err != nil {
 		log.Printf("Invalid room ID: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid room ID"})
 		return
 	}
 
-	// Calculate the maximum value of uint based on the platform
-	maxUint := ^uint(0)
-	if roomIDUint64 > uint64(maxUint) {
-		log.Printf("Room ID out of bounds: %v", roomIDUint64)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Room ID out of bounds"})
-		return
-	}
-	roomID := uint(roomIDUint64)
+	// No need for upper bound check; use uint64 throughout
 
 	// Extract token from cookies
 	tokenString, err := c.Cookie("jwt_token")
