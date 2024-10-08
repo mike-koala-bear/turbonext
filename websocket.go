@@ -25,13 +25,21 @@ var upgrader = websocket.Upgrader{
 // Handle incoming WebSocket connections
 func handleWebSocket(c *gin.Context) {
 	roomIDParam := c.Param("roomID")
-	roomIDUint, err := strconv.ParseUint(roomIDParam, 10, 64)
+	roomIDUint64, err := strconv.ParseUint(roomIDParam, 10, 64)
 	if err != nil {
 		log.Printf("Invalid room ID: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid room ID"})
 		return
 	}
-	roomID := uint(roomIDUint)
+
+	// Calculate the maximum value of uint based on the platform
+	maxUint := ^uint(0)
+	if roomIDUint64 > uint64(maxUint) {
+		log.Printf("Room ID out of bounds: %v", roomIDUint64)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Room ID out of bounds"})
+		return
+	}
+	roomID := uint(roomIDUint64)
 
 	// Extract token from cookies
 	tokenString, err := c.Cookie("jwt_token")

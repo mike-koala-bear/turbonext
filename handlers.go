@@ -81,11 +81,19 @@ func getRoomsHandler(c *gin.Context) {
 // Get messages in a room
 func getMessagesHandler(c *gin.Context) {
 	roomIDParam := c.Param("roomID")
-	roomID, err := strconv.ParseUint(roomIDParam, 10, 64)
+	roomIDUint64, err := strconv.ParseUint(roomIDParam, 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid room ID"})
 		return
 	}
+
+	// Calculate max uint value based on platform
+	maxUint := ^uint(0)
+	if roomIDUint64 > uint64(maxUint) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Room ID out of bounds"})
+		return
+	}
+	roomID := uint(roomIDUint64)
 
 	var messages []Message
 	if err := db.Where("room_id = ?", roomID).Order("created_at desc").Find(&messages).Error; err != nil {
@@ -98,13 +106,21 @@ func getMessagesHandler(c *gin.Context) {
 // postMessageHandler handles incoming messages via HTTP POST
 func postMessageHandler(c *gin.Context) {
 	roomIDParam := c.Param("roomID")
-	roomIDUint, err := strconv.ParseUint(roomIDParam, 10, 64)
+	roomIDUint64, err := strconv.ParseUint(roomIDParam, 10, 64)
 	if err != nil {
 		log.Printf("Invalid room ID: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid room ID"})
 		return
 	}
-	roomID := uint(roomIDUint)
+
+	// Calculate max uint value based on platform
+	maxUint := ^uint(0)
+	if roomIDUint64 > uint64(maxUint) {
+		log.Printf("Room ID out of bounds: %v", roomIDUint64)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Room ID out of bounds"})
+		return
+	}
+	roomID := uint(roomIDUint64)
 
 	// Extract token from cookies
 	tokenString, err := c.Cookie("jwt_token")
