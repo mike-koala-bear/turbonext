@@ -12,10 +12,23 @@ import (
 )
 
 type Message struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	Username  string    `json:"username"`
-	Content   string    `json:"content"`
-	CreatedAt time.Time `json:"created_at"`
+	ID        uint           `json:"id" gorm:"primaryKey"`
+	Username  string         `json:"username"`
+	Content   string         `json:"content"`
+	CreatedAt time.Time      `json:"created_at"`
+	RoomID    uint           `json:"room_id"`
+	Room      Room           `json:"-"`
+	DeletedAt gorm.DeletedAt `json:"-" gorm:"index"`
+}
+
+// Room represents a chat room
+type Room struct {
+	ID        uint           `json:"id" gorm:"primaryKey"`
+	Name      string         `json:"name"`
+	Messages  []Message      `json:"messages"`
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
+	DeletedAt gorm.DeletedAt `json:"-" gorm:"index"`
 }
 
 type User struct {
@@ -52,7 +65,7 @@ func initDatabase() {
 	}
 
 	// Automatically migrate the schema
-	err = db.AutoMigrate(&Message{}, &User{})
+	err = db.AutoMigrate(&Message{}, &Room{}, &User{})
 	if err != nil {
 		log.Fatal("Failed to migrate database schema:", err)
 	}

@@ -1,3 +1,4 @@
+// app/navbar.js
 "use client"
 
 import Link from "next/link"
@@ -29,6 +30,16 @@ export default function Navbar() {
           Home
         </Link>
         <div>
+          {isAuthenticated && (
+            <>
+              <Link href="/create-room" className="text-white mr-4">
+                Create Room
+              </Link>
+              <Link href="/rooms" className="text-white mr-4">
+                Rooms
+              </Link>
+            </>
+          )}
           {!isAuthenticated ? (
             <>
               <Link href="/login" className="text-white mr-4">

@@ -24,8 +24,8 @@ export default function Login() {
       // Update authentication status
       setIsAuthenticated(true)
 
-      // Redirect to the chat page
-      router.push("/chat")
+      // Redirect to the home page
+      router.push("/")
     } catch (err) {
       console.log("Error:", err)
       setError("Invalid username or password")
