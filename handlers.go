@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"math"
 	"net/http"
 	"strconv"
 	"time"
@@ -81,18 +82,28 @@ func getRoomsHandler(c *gin.Context) {
 // Get messages in a room
 func getMessagesHandler(c *gin.Context) {
 	roomIDParam := c.Param("roomID")
-	roomIDUint64, err := strconv.ParseUint(roomIDParam, 10, 64)
+	roomIDUint64, err := strconv.ParseUint(roomIDParam, 10, strconv.IntSize)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid room ID"})
 		return
 	}
 
-	// Calculate max uint value based on platform
-	maxUint := ^uint(0)
-	if roomIDUint64 > uint64(maxUint) {
+	// Perform upper bound check using constants from the math package
+	var maxUint64 uint64
+	if strconv.IntSize == 32 {
+		maxUint64 = uint64(math.MaxUint32)
+	} else if strconv.IntSize == 64 {
+		maxUint64 = uint64(math.MaxUint64)
+	} else {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Unsupported platform"})
+		return
+	}
+
+	if roomIDUint64 > maxUint64 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Room ID out of bounds"})
 		return
 	}
+
 	roomID := uint(roomIDUint64)
 
 	var messages []Message
@@ -106,20 +117,31 @@ func getMessagesHandler(c *gin.Context) {
 // postMessageHandler handles incoming messages via HTTP POST
 func postMessageHandler(c *gin.Context) {
 	roomIDParam := c.Param("roomID")
-	roomIDUint64, err := strconv.ParseUint(roomIDParam, 10, 64)
+	roomIDUint64, err := strconv.ParseUint(roomIDParam, 10, strconv.IntSize)
 	if err != nil {
 		log.Printf("Invalid room ID: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid room ID"})
 		return
 	}
 
-	// Calculate max uint value based on platform
-	maxUint := ^uint(0)
-	if roomIDUint64 > uint64(maxUint) {
+	// Perform upper bound check using constants from the math package
+	var maxUint64 uint64
+	if strconv.IntSize == 32 {
+		maxUint64 = uint64(math.MaxUint32)
+	} else if strconv.IntSize == 64 {
+		maxUint64 = uint64(math.MaxUint64)
+	} else {
+		log.Printf("Unsupported platform")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Unsupported platform"})
+		return
+	}
+
+	if roomIDUint64 > maxUint64 {
 		log.Printf("Room ID out of bounds: %v", roomIDUint64)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Room ID out of bounds"})
 		return
 	}
+
 	roomID := uint(roomIDUint64)
 
 	// Extract token from cookies
