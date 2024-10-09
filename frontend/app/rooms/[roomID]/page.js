@@ -13,7 +13,7 @@ export default function RoomPage() {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState("")
   const { isAuthenticated, loading } = useContext(AuthContext)
-  const messageEndRef = useRef(null)
+  const messageStartRef = useRef(null)
   const ws = useRef(null)
 
   // Fetch existing messages when component mounts
@@ -23,24 +23,23 @@ export default function RoomPage() {
         const res = await axios.get(`/api/rooms/${roomID}/messages`, {
           withCredentials: true,
         })
-        console.log("API Response:", res.data) // Add this line
-        setMessages(res.data.messages)
+        console.log("API Response:", res.data)
+        setMessages(res.data.messages.reverse()) // Keep reverse to maintain order
         setRoomName(res.data.room_name)
-        scrollToBottom()
+        scrollToTop()
       } catch (err) {
         console.error("Error fetching messages:", err)
       }
     }
 
     fetchMessages()
-  }, [])
+  }, [roomID])
 
   // Establish WebSocket connection
   useEffect(() => {
     if (!isAuthenticated) return
 
     const setupWebSocket = () => {
-      // Initialize WebSocket connection; cookies are sent automatically
       ws.current = new WebSocket(`ws://localhost:8080/ws/${roomID}`)
 
       ws.current.onopen = () => {
@@ -54,8 +53,9 @@ export default function RoomPage() {
             console.error("WebSocket Error:", newMessage.error)
             return
           }
-          setMessages((prevMessages) => [...prevMessages, newMessage])
-          scrollToBottom()
+          setMessages((prevMessages) => [newMessage, ...prevMessages])
+          // Scroll to top since new message is at the top
+          scrollToTop()
         } catch (err) {
           console.error("Error parsing WebSocket message:", err)
         }
@@ -72,17 +72,16 @@ export default function RoomPage() {
 
     setupWebSocket()
 
-    // Cleanup on component unmount
     return () => {
       if (ws.current) {
         ws.current.close()
       }
     }
-  }, [])
+  }, [isAuthenticated, roomID])
 
-  // Scroll to the latest message
-  const scrollToBottom = () => {
-    messageEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  // Scroll to the latest message (now at the top)
+  const scrollToTop = () => {
+    messageStartRef.current?.scrollIntoView({ behavior: "smooth" })
   }
 
   // Handle sending a message via HTTP POST
@@ -93,7 +92,6 @@ export default function RoomPage() {
     const messagePayload = { content: input }
 
     try {
-      // Send message via HTTP POST
       const res = await axios.post(
         `/api/rooms/${roomID}/messages`,
         messagePayload,
@@ -125,6 +123,7 @@ export default function RoomPage() {
     <div className="min-h-screen p-8 bg-gray-100 flex flex-col">
       <h1 className="text-3xl font-bold mb-6">Room: {roomName}</h1>
       <div className="flex-1 overflow-y-auto bg-white p-4 rounded-lg shadow-md mb-4">
+        <div ref={messageStartRef} />
         {messages.map((message) => (
           <div key={message.id} className="mb-4">
             <p className="text-sm text-gray-500">
@@ -134,7 +133,6 @@ export default function RoomPage() {
             <p className="text-base">{message.content}</p>
           </div>
         ))}
-        <div ref={messageEndRef} />
       </div>
       <form onSubmit={handleSendMessage} className="flex space-x-4 mt-4">
         <input
