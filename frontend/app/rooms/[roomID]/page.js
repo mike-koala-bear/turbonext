@@ -4,10 +4,12 @@ import { useEffect, useState, useRef, useContext } from "react"
 import { useParams } from "next/navigation"
 import axios from "axios"
 import AuthContext from "../../context/AuthContext"
+import { format } from "date-fns"
 
 export default function RoomPage() {
   const params = useParams()
   const roomID = params.roomID
+  const [roomName, setRoomName] = useState("")
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState("")
   const { isAuthenticated, loading } = useContext(AuthContext)
@@ -21,12 +23,15 @@ export default function RoomPage() {
         const res = await axios.get(`/api/rooms/${roomID}/messages`, {
           withCredentials: true,
         })
-        setMessages(res.data)
+        console.log("API Response:", res.data) // Add this line
+        setMessages(res.data.messages)
+        setRoomName(res.data.room_name)
         scrollToBottom()
       } catch (err) {
         console.error("Error fetching messages:", err)
       }
     }
+
     fetchMessages()
   }, [])
 
@@ -118,16 +123,20 @@ export default function RoomPage() {
 
   return (
     <div className="min-h-screen p-8 bg-gray-100 flex flex-col">
-      <h1 className="text-3xl font-bold mb-6">Room: {roomID}</h1>
+      <h1 className="text-3xl font-bold mb-6">Room: {roomName}</h1>
       <div className="flex-1 overflow-y-auto bg-white p-4 rounded-lg shadow-md mb-4">
         {messages.map((message) => (
-          <p key={message.id}>
-            <strong>{message.username}:</strong> {message.content}
-          </p>
+          <div key={message.id} className="mb-4">
+            <p className="text-sm text-gray-500">
+              <strong>{message.username}</strong> •{" "}
+              {format(new Date(message.created_at), "PPPpp")}
+            </p>
+            <p className="text-base">{message.content}</p>
+          </div>
         ))}
         <div ref={messageEndRef} />
       </div>
-      <form onSubmit={handleSendMessage} className="flex space-x-4">
+      <form onSubmit={handleSendMessage} className="flex space-x-4 mt-4">
         <input
           type="text"
           value={input}

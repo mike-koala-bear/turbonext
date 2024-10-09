@@ -79,7 +79,7 @@ func getRoomsHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, rooms)
 }
 
-// Get messages in a room
+// Get messages in a room along with the room name
 func getMessagesHandler(c *gin.Context) {
 	roomIDParam := c.Param("roomID")
 	roomIDUint64, err := strconv.ParseUint(roomIDParam, 10, strconv.IntSize)
@@ -106,12 +106,25 @@ func getMessagesHandler(c *gin.Context) {
 
 	roomID := uint(roomIDUint64)
 
+	// Fetch the room name
+	var room Room
+	if err := db.First(&room, roomID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Room not found"})
+		return
+	}
+
+	// Fetch messages in the room
 	var messages []Message
-	if err := db.Where("room_id = ?", roomID).Order("created_at desc").Find(&messages).Error; err != nil {
+	if err := db.Where("room_id = ?", roomID).Order("created_at asc").Find(&messages).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve messages"})
 		return
 	}
-	c.JSON(http.StatusOK, messages)
+
+	// Return both room name and messages
+	c.JSON(http.StatusOK, gin.H{
+		"room_name": room.Name,
+		"messages":  messages,
+	})
 }
 
 // postMessageHandler handles incoming messages via HTTP POST
