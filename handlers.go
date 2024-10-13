@@ -41,8 +41,10 @@ func checkAuthHandler(c *gin.Context) {
 		return
 	}
 
-	// Return success if the token is valid
-	c.JSON(http.StatusOK, gin.H{"message": "Authenticated"})
+	// Return success if the token is valid, include the username
+	c.JSON(http.StatusOK, gin.H{
+		"username": claims.Username,
+	})
 }
 
 // Create a new room
