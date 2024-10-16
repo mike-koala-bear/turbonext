@@ -11,6 +11,7 @@ export function AuthProvider({
 }) {
   const [isAuthenticated, setIsAuthenticated] = useState(initialAuth)
   const [loading, setLoading] = useState(true)
+  const [username, setUsername] = useState("")
 
   useEffect(() => {
     const validateToken = async () => {
@@ -24,11 +25,14 @@ export function AuthProvider({
 
         if (res.status === 200) {
           setIsAuthenticated(true)
+          setUsername(res.data.username) // Set the username from the response
         } else {
           setIsAuthenticated(false)
+          setUsername("") // Clear username if not authenticated
         }
       } catch (error) {
         setIsAuthenticated(false)
+        setUsername("") // Clear username on error
       } finally {
         setLoading(false)
       }
@@ -39,7 +43,7 @@ export function AuthProvider({
 
   return (
     <AuthContext.Provider
-      value={{ isAuthenticated, setIsAuthenticated, loading }}
+      value={{ isAuthenticated, setIsAuthenticated, loading, username }}
     >
       {children}
     </AuthContext.Provider>

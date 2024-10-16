@@ -16,12 +16,18 @@ export default function RoomList() {
   }, [])
 
   return (
-    <div>
-      <h2>Available Rooms</h2>
-      <ul>
+    <div className="m-10">
+      <h2 className="text-3xl font-medium">Available Rooms</h2>
+
+      <ul className="mt-4 list-disc">
         {rooms.map((room) => (
           <li key={room.id}>
-            <Link href={`/rooms/${room.id}`}>{room.name}</Link>
+            <Link
+              href={`/rooms/${room.id}`}
+              className="text-blue-500 hover:text-blue-400 hover:underline"
+            >
+              {room.name}
+            </Link>
           </li>
         ))}
       </ul>
