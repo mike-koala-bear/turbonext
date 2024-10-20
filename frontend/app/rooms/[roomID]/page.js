@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, useContext } from "react"
 import { useParams } from "next/navigation"
 import axios from "axios"
 import AuthContext from "../../context/AuthContext"
-import { format } from "date-fns"
+import Message from "./message"
 
 export default function RoomPage() {
   const params = useParams()
@@ -136,44 +136,11 @@ export default function RoomPage() {
           const isCurrentUser = messageUsername === currentUsername
 
           return (
-            <div
+            <Message
               key={message.id}
-              className={`flex ${
-                isCurrentUser ? "justify-end" : "justify-start"
-              }`}
-            >
-              <div
-                className={`relative max-w-xs rounded-lg p-3 shadow-lg ${
-                  isCurrentUser
-                    ? "bg-blue-500 text-white"
-                    : "bg-gray-200 text-gray-800"
-                }`}
-              >
-                {/* Tail */}
-                <div
-                  className={`absolute bottom-0 w-0 h-0 border-t-8 border-t-transparent ${
-                    isCurrentUser
-                      ? "right-0 transform translate-x-1/2 border-l-8 border-l-blue-500"
-                      : "left-0 transform -translate-x-1/2 border-r-8 border-r-gray-200"
-                  }`}
-                ></div>
-
-                {/* Header (Username and Time) */}
-                <div className="flex items-center mb-1">
-                  <span className="text-sm font-semibold">
-                    {message.username}
-                  </span>
-                  <span className="text-xs text-gray-300 ml-2">
-                    {format(new Date(message.created_at), "PPPpp")}
-                  </span>
-                </div>
-
-                {/* Message Content */}
-                <div className="break-words leading-relaxed">
-                  {message.content}
-                </div>
-              </div>
-            </div>
+              message={message}
+              isCurrentUser={isCurrentUser}
+            />
           )
         })}
         {/* Spacer at the bottom */}
