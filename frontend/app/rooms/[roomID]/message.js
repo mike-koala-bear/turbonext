@@ -30,11 +30,13 @@ export default function Message({ message, isCurrentUser }) {
   }, [message.created_at])
 
   return (
-    <div className={`flex ${isCurrentUser ? "justify-end" : "justify-start"}`}>
+    <div className="flex">
       <div
-        className={`relative max-w-xs rounded-lg p-3 shadow-lg ${
-          isCurrentUser ? "bg-blue-500 text-white" : "bg-gray-200 text-gray-800"
-        }`}
+        className={`relative rounded-lg p-3 shadow-lg ${
+          isCurrentUser
+            ? "bg-blue-500 text-white ml-auto rounded-br-none"
+            : "bg-gray-200 text-gray-800 mr-auto rounded-bl-none"
+        } max-w-[50vw]`}
       >
         {/* Tail */}
         <div
