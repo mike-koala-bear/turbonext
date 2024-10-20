@@ -124,7 +124,7 @@ export default function RoomPage() {
   return (
     <div className="min-h-screen flex flex-col bg-gray-100">
       {/* Header */}
-      <div className="bg-white shadow-md p-4 sticky top-0">
+      <div className="bg-white shadow-md p-4 sticky top-0 z-10">
         <h1 className="text-2xl font-bold text-center">Room: {roomName}</h1>
       </div>
 
