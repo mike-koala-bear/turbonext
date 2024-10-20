@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, useContext } from "react"
 import { useParams } from "next/navigation"
 import axios from "axios"
 import AuthContext from "../../context/AuthContext"
-import { format } from "date-fns"
+import Message from "./message"
 
 export default function RoomPage() {
   const params = useParams()
@@ -12,8 +12,8 @@ export default function RoomPage() {
   const [roomName, setRoomName] = useState("")
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState("")
-  const { isAuthenticated, loading } = useContext(AuthContext)
-  const messageStartRef = useRef(null)
+  const { isAuthenticated, loading, username } = useContext(AuthContext)
+  const messageEndRef = useRef(null)
   const ws = useRef(null)
 
   // Fetch existing messages when component mounts
@@ -24,9 +24,8 @@ export default function RoomPage() {
           withCredentials: true,
         })
         console.log("API Response:", res.data)
-        setMessages(res.data.messages.reverse()) // Keep reverse to maintain order
+        setMessages(res.data.messages)
         setRoomName(res.data.room_name)
-        scrollToTop()
       } catch (err) {
         console.error("Error fetching messages:", err)
       }
@@ -34,6 +33,11 @@ export default function RoomPage() {
 
     fetchMessages()
   }, [roomID])
+
+  // Scroll to the last message when messages are fetched or updated
+  useEffect(() => {
+    scrollToBottom()
+  }, [messages])
 
   // Establish WebSocket connection
   useEffect(() => {
@@ -53,9 +57,7 @@ export default function RoomPage() {
             console.error("WebSocket Error:", newMessage.error)
             return
           }
-          setMessages((prevMessages) => [newMessage, ...prevMessages])
-          // Scroll to top since new message is at the top
-          scrollToTop()
+          setMessages((prevMessages) => [...prevMessages, newMessage]) // Append new messages at the end
         } catch (err) {
           console.error("Error parsing WebSocket message:", err)
         }
@@ -79,9 +81,9 @@ export default function RoomPage() {
     }
   }, [isAuthenticated, roomID])
 
-  // Scroll to the latest message (now at the top)
-  const scrollToTop = () => {
-    messageStartRef.current?.scrollIntoView({ behavior: "smooth" })
+  // Scroll to the last message
+  const scrollToBottom = () => {
+    messageEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }
 
   // Handle sending a message via HTTP POST
@@ -120,32 +122,46 @@ export default function RoomPage() {
   }
 
   return (
-    <div className="min-h-screen p-8 bg-gray-100 flex flex-col">
-      <h1 className="text-3xl font-bold mb-6">Room: {roomName}</h1>
-      <div className="flex-1 overflow-y-auto bg-white p-4 rounded-lg shadow-md mb-4">
-        <div ref={messageStartRef} />
-        {messages.map((message) => (
-          <div key={message.id} className="mb-4">
-            <p className="text-sm text-gray-500">
-              <strong>{message.username}</strong> •{" "}
-              {format(new Date(message.created_at), "PPPpp")}
-            </p>
-            <p className="text-base">{message.content}</p>
-          </div>
-        ))}
+    <div className="min-h-screen flex flex-col bg-gray-100">
+      {/* Header */}
+      <div className="bg-white shadow-md p-4 sticky top-0 z-10">
+        <h1 className="text-2xl font-bold text-center">Room: {roomName}</h1>
       </div>
-      <form onSubmit={handleSendMessage} className="flex space-x-4 mt-4">
+
+      {/* Messages List */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-24">
+        {messages.map((message) => {
+          const messageUsername = message.username?.trim().toLowerCase() || ""
+          const currentUsername = username?.trim().toLowerCase() || ""
+          const isCurrentUser = messageUsername === currentUsername
+
+          return (
+            <Message
+              key={message.id}
+              message={message}
+              isCurrentUser={isCurrentUser}
+            />
+          )
+        })}
+        {/* Spacer at the bottom */}
+        <div ref={messageEndRef} />
+      </div>
+
+      <form
+        onSubmit={handleSendMessage}
+        className="fixed bottom-0 left-0 w-full flex items-center space-x-4 p-4 bg-white border-t border-gray-300"
+      >
         <input
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Type a message..."
-          className="flex-1 p-2 border border-gray-300 rounded"
+          className="flex-1 p-3 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-400"
           required
         />
         <button
           type="submit"
-          className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+          className="bg-blue-500 text-white px-4 py-2 rounded-full hover:bg-blue-600"
         >
           Send
         </button>
